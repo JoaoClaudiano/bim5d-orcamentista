@@ -7,6 +7,10 @@ import GanttChart from './components/GanttChart'
 import FaseChart from './components/FaseChart'
 import ProjetosSidebar from './components/ProjetosSidebar'
 import EstadoSelector from './components/EstadoSelector'
+import CalendarioConfig from './components/CalendarioConfig'
+import EquipeSelector from './components/EquipeSelector'
+import RvtUploadZone from './components/RvtUploadZone'
+import QuantidadesReview from './components/QuantidadesReview'
 import { useAuth } from './components/AuthGate'
 import { useDepara } from './hooks/useDepara'
 import { parseRevitFile, gerarCSVDemo } from './lib/revit-parser'
@@ -20,9 +24,11 @@ import { logError, logProcessing } from './lib/telemetry'
 
 const TABS = [
   { id: 'orcamento', label: 'Orçamento', icon: '₿' },
-  { id: 'gantt', label: 'Cronograma', icon: '📅' },
-  { id: 'resumo', label: 'Distribuição', icon: '◉' },
+  { id: 'gantt',     label: 'Cronograma', icon: '📅' },
+  { id: 'resumo',    label: 'Distribuição', icon: '◉' },
 ]
+
+const CALENDARIO_PADRAO = { horasPorDia: 8, paralelo: true, feriados: [] }
 
 export default function App() {
   const { user, signOut } = useAuth()
@@ -48,6 +54,20 @@ export default function App() {
 
   // Data de início do cronograma (Gantt)
   const [dataInicio, setDataInicio] = useState(() => new Date().toISOString().split('T')[0])
+
+  // Configuração do calendário de obra (Phase 4)
+  const [calendario, setCalendario] = useState(CALENDARIO_PADRAO)
+
+  // Equipe ativa (Phase 3)
+  const [equipeAtiva, setEquipeAtiva] = useState(null)
+
+  // Fluxo .rvt (Phase 5): 'idle' | 'review'
+  const [modoRvt, setModoRvt] = useState('idle')
+  const [quantitativosRvt, setQuantitativosRvt] = useState([])
+  const [arquivoRvtNome, setArquivoRvtNome] = useState('')
+
+  // Modo de upload: 'schedule' (CSV/Excel) | 'rvt'
+  const [modoUpload, setModoUpload] = useState('schedule')
 
   const planoUsuario = useMemo(() => obterPlanoUsuario(user), [user])
 
@@ -109,8 +129,6 @@ export default function App() {
   }
 
   function resolverDataInicio() {
-    // Usa a data selecionada pelo usuário; cria no meio-dia para evitar
-    // ambiguidade de fuso horário ao converter de string ISO
     return dataInicio ? new Date(`${dataInicio}T12:00:00`) : new Date()
   }
 
@@ -118,7 +136,8 @@ export default function App() {
     setItens(mapeados)
 
     const startDate = resolverDataInicio()
-    const { tarefas, totalDias, dataFim } = gerarCronograma(mapeados, startDate)
+    const cronConfig = { horasPorDia: calendario.horasPorDia, paralelo: calendario.paralelo, feriados: calendario.feriados }
+    const { tarefas, totalDias, dataFim } = gerarCronograma(mapeados, startDate, cronConfig)
     setCronograma({ tarefas, totalDias, dataFim })
 
     setFileName(nomeArquivo)
@@ -172,7 +191,6 @@ export default function App() {
       const cronogramaGerado = atualizarEstadoProjeto(file.name, mapeados)
       setProjetoAtualId(null)
 
-      // Telemetria
       const unmapped = mapeados.filter(i => i.confianca === 'baixa').length
       logProcessing({
         totalRows: revitData.length,
@@ -197,6 +215,48 @@ export default function App() {
     }
   }
 
+  // ── Phase 5: fluxo .rvt ────────────────────────────────────────────────────
+  function handleQuantitativosRvtProntos(qtvsRvt, nomeArq) {
+    setQuantitativosRvt(qtvsRvt)
+    setArquivoRvtNome(nomeArq)
+    setModoRvt('review')
+  }
+
+  async function handleConfirmarQuantidadesRvt(linhasConfirmadas) {
+    // Converte linhas do review para o formato de revitData e mapeia
+    setLoading(true)
+    setErro(null)
+    try {
+      const revitData = linhasConfirmadas
+        .filter(l => l.quantidade > 0)
+        .map(l => ({
+          categoria: l.categoria,
+          quantidade: l.quantidade,
+          unidade:    l.unidade,
+          codigoForcado: l.codigoSinapi || null,
+        }))
+
+      const mapeados = await mapearItens(revitData)
+      const cronogramaGerado = atualizarEstadoProjeto(arquivoRvtNome, mapeados)
+      setModoRvt('idle')
+      setProjetoAtualId(null)
+
+      await tentarSalvarProjetoNovo({
+        nome: arquivoRvtNome,
+        arquivoNome: arquivoRvtNome,
+        itensProjeto: mapeados,
+        cronogramaProjeto: cronogramaGerado,
+      })
+    } catch (e) {
+      logError('process_rvt_review', e.message)
+      setErro(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+
   async function usarDemo() {
     const demoFile = gerarCSVDemo()
     await processarArquivo(demoFile)
@@ -218,7 +278,7 @@ export default function App() {
       setFileName(projeto.arquivo_nome || projeto.nome)
       setItens(Array.isArray(projeto.itens) ? projeto.itens : [])
       setCronograma(projeto.cronograma || null)
-    } catch (error) {
+    } catch {
       setErro('Não foi possível carregar este projeto.')
     }
   }
@@ -242,6 +302,8 @@ export default function App() {
     setFileName(null)
     setErro(null)
     setTab('orcamento')
+    setModoRvt('idle')
+    setQuantitativosRvt([])
   }
 
   async function handleCorrigirDepara(item, index, codigo) {
@@ -264,7 +326,8 @@ export default function App() {
       const novosItens = itens.map((atual, i) => (i === index ? novoItem : atual))
       setItens(novosItens)
 
-      const novoCronograma = gerarCronograma(novosItens, resolverDataInicio())
+      const cronConfig = { horasPorDia: calendario.horasPorDia, paralelo: calendario.paralelo, feriados: calendario.feriados }
+      const novoCronograma = gerarCronograma(novosItens, resolverDataInicio(), cronConfig)
       setCronograma(novoCronograma)
 
       if (user && projetoAtualId) {
@@ -363,19 +426,27 @@ export default function App() {
 
         <div className={user ? 'grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6' : ''}>
           {user && (
-            <ProjetosSidebar
-              projetos={projetos}
-              projetoAtualId={projetoAtualId}
-              onNovoProjeto={handleNovoProjeto}
-              onSelecionarProjeto={handleSelecionarProjeto}
-              onDeletarProjeto={handleDeletarProjeto}
-              loading={loadingProjetos}
-            />
+            <div className="space-y-4">
+              <ProjetosSidebar
+                projetos={projetos}
+                projetoAtualId={projetoAtualId}
+                onNovoProjeto={handleNovoProjeto}
+                onSelecionarProjeto={handleSelecionarProjeto}
+                onDeletarProjeto={handleDeletarProjeto}
+                loading={loadingProjetos}
+              />
+              {/* Phase 3: Equipe */}
+              <EquipeSelector
+                user={user}
+                equipeAtual={equipeAtiva}
+                onEquipeMudou={setEquipeAtiva}
+              />
+            </div>
           )}
 
           <div className="space-y-8">
             {/* Upload area */}
-            {!hasData && (
+            {!hasData && modoRvt !== 'review' && (
               <div className="max-w-2xl mx-auto animate-fade-in">
                 <div className="text-center mb-8">
                   <h2 className="text-3xl font-bold font-display text-white mb-3">
@@ -383,11 +454,40 @@ export default function App() {
                     <br />para orçamento em segundos
                   </h2>
                   <p className="text-white/40 text-sm max-w-md mx-auto">
-                    Faça upload do Schedule exportado pelo Revit. O sistema cruza automaticamente com as composições da SINAPI e gera orçamento + cronograma.
+                    Envie o Schedule exportado pelo Revit (CSV/Excel) ou o arquivo .rvt diretamente.
+                    O sistema cruza automaticamente com a SINAPI e gera orçamento + cronograma.
                   </p>
                 </div>
 
-                <UploadZone onFile={processarArquivo} loading={loading} />
+                {/* Toggle modo de upload */}
+                <div className="flex rounded-xl bg-white/[0.03] border border-white/8 p-1 mb-5 gap-1">
+                  <button
+                    onClick={() => setModoUpload('schedule')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      modoUpload === 'schedule'
+                        ? 'bg-brand-700/30 border border-brand-600/30 text-brand-200'
+                        : 'text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    📄 Schedule CSV / Excel
+                  </button>
+                  <button
+                    onClick={() => setModoUpload('rvt')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      modoUpload === 'rvt'
+                        ? 'bg-yellow-700/20 border border-yellow-600/25 text-yellow-200'
+                        : 'text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    🧊 Arquivo .rvt (BIM 5D)
+                  </button>
+                </div>
+
+                {modoUpload === 'schedule' ? (
+                  <UploadZone onFile={processarArquivo} loading={loading} />
+                ) : (
+                  <RvtUploadZone onQuantitativosProntos={handleQuantitativosRvtProntos} />
+                )}
 
                 {erro && (
                   <div className="mt-4 p-3 rounded-lg bg-red-950/30 border border-red-800/30 text-red-300 text-sm">
@@ -395,22 +495,24 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={usarDemo}
-                    disabled={loading}
-                    className="text-sm text-brand-400 hover:text-brand-300 underline underline-offset-4 transition-colors disabled:opacity-50"
-                  >
-                    Não tenho o Revit agora — usar dados de demonstração
-                  </button>
-                </div>
+                {modoUpload === 'schedule' && (
+                  <div className="mt-4 text-center">
+                    <button
+                      onClick={usarDemo}
+                      disabled={loading}
+                      className="text-sm text-brand-400 hover:text-brand-300 underline underline-offset-4 transition-colors disabled:opacity-50"
+                    >
+                      Não tenho o Revit agora — usar dados de demonstração
+                    </button>
+                  </div>
+                )}
 
                 {/* Features */}
                 <div className="mt-10 grid grid-cols-3 gap-3">
                   {[
-                    { icon: '⚡', title: 'Mapeamento automático', desc: 'De-Para inteligente: categoria Revit → código SINAPI' },
+                    { icon: '⚡', title: 'Mapeamento automático', desc: 'De-Para: categoria Revit → SINAPI' },
                     { icon: '📅', title: 'Cronograma 4D', desc: 'Prazo calculado pela produtividade SINAPI' },
-                    { icon: '📊', title: 'Exportação completa', desc: 'Excel com orçamento, fases e de-para' },
+                    { icon: '🧊', title: 'Upload .rvt', desc: 'Extrai quantitativos direto do Revit via APS' },
                   ].map(f => (
                     <div key={f.title} className="glass rounded-xl p-4 text-center">
                       <div className="text-2xl mb-2">{f.icon}</div>
@@ -419,6 +521,18 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Phase 5: Revisão de quantitativos do .rvt */}
+            {modoRvt === 'review' && (
+              <div className="animate-fade-in">
+                <QuantidadesReview
+                  quantitativos={quantitativosRvt}
+                  arquivoNome={arquivoRvtNome}
+                  onConfirmar={handleConfirmarQuantidadesRvt}
+                  onCancelar={() => setModoRvt('idle')}
+                />
               </div>
             )}
 
@@ -468,6 +582,9 @@ export default function App() {
                   dataFim={cronograma?.dataFim}
                 />
 
+                {/* Phase 4: Calendário da obra */}
+                <CalendarioConfig config={calendario} onChange={setCalendario} />
+
                 {/* Tabs */}
                 <div className="border-b border-white/8">
                   <nav className="flex gap-1">
@@ -515,7 +632,7 @@ export default function App() {
       <footer className="border-t border-white/5 mt-16">
         <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between text-xs text-white/20">
           <span>Orçamentista BIM 5D — MVP Open Source</span>
-          <span>SINAPI CE | Dados com fins educacionais</span>
+          <span>SINAPI {estado} | biblioteca de {Object.keys({CE:1,SP:1,RJ:1,MG:1,RS:1,BA:1,PE:1,DF:1}).length} UFs</span>
         </div>
       </footer>
     </div>

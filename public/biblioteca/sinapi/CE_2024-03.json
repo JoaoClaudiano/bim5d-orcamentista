@@ -1,0 +1,167 @@
+{
+  "estado": "CE",
+  "referencia": "2024-03",
+  "fonte": "SINAPI CAIXA — tabela sintética de composições (dados educacionais/demonstração)",
+  "composicoes": [
+    {
+      "codigo": "87503",
+      "descricao": "Alvenaria de vedação de blocos cerâmicos furados na horizontal 9x19x19cm, e=9cm",
+      "unidade": "m²",
+      "custo_total": 62.18,
+      "mo": 28.45,
+      "material": 33.73
+    },
+    {
+      "codigo": "87251",
+      "descricao": "Contrapiso em argamassa traço 1:3 (cimento/areia), preparo mecânico, esp=4cm",
+      "unidade": "m²",
+      "custo_total": 38.92,
+      "mo": 14.2,
+      "material": 24.72
+    },
+    {
+      "codigo": "94966",
+      "descricao": "Concreto usinado bombeável fck=25MPa, lançado, adensado e acabado em lajes",
+      "unidade": "m³",
+      "custo_total": 548.3,
+      "mo": 62.1,
+      "material": 486.2
+    },
+    {
+      "codigo": "94978",
+      "descricao": "Concreto usinado bombeável fck=30MPa, lançado, adensado e acabado em pilares",
+      "unidade": "m³",
+      "custo_total": 578.5,
+      "mo": 68.4,
+      "material": 510.1
+    },
+    {
+      "codigo": "92793",
+      "descricao": "Armação de aço CA-50 diâm. 10,0mm",
+      "unidade": "kg",
+      "custo_total": 14.82,
+      "mo": 4.3,
+      "material": 10.52
+    },
+    {
+      "codigo": "87447",
+      "descricao": "Forma para lajes, em chapa de madeira compensada plastificada e=18mm, 1 uso",
+      "unidade": "m²",
+      "custo_total": 58.16,
+      "mo": 22.4,
+      "material": 35.76
+    },
+    {
+      "codigo": "87264",
+      "descricao": "Revestimento cerâmico para piso, carga elevada, 35x35cm (a=0,30m²/peça)",
+      "unidade": "m²",
+      "custo_total": 82.74,
+      "mo": 23.6,
+      "material": 59.14
+    },
+    {
+      "codigo": "87549",
+      "descricao": "Chapisco rolado de paredes internas de concreto, traço 1:4 cimento/areia",
+      "unidade": "m²",
+      "custo_total": 8.94,
+      "mo": 5.1,
+      "material": 3.84
+    },
+    {
+      "codigo": "74209",
+      "descricao": "Revestimento de gesso liso em teto, espessura de 2mm",
+      "unidade": "m²",
+      "custo_total": 28.4,
+      "mo": 18.9,
+      "material": 9.5
+    },
+    {
+      "codigo": "87296",
+      "descricao": "Pintura acrílica em paredes internas, 2 demãos + selador, tinta 1ª linha",
+      "unidade": "m²",
+      "custo_total": 22.6,
+      "mo": 10.2,
+      "material": 12.4
+    },
+    {
+      "codigo": "72136",
+      "descricao": "Lastro de concreto magro, e=5cm, preparo mecânico",
+      "unidade": "m²",
+      "custo_total": 27.2,
+      "mo": 8.5,
+      "material": 18.7
+    },
+    {
+      "codigo": "72137",
+      "descricao": "Sapata isolada de concreto fck=15MPa, preparo mecânico, com espera de armação",
+      "unidade": "m³",
+      "custo_total": 555.0,
+      "mo": 145.0,
+      "material": 410.0
+    },
+    {
+      "codigo": "88267",
+      "descricao": "Tubo PVC rígido soldável Ø100mm para instalação de esgoto embutida",
+      "unidade": "m",
+      "custo_total": 37.3,
+      "mo": 12.8,
+      "material": 24.5
+    },
+    {
+      "codigo": "88271",
+      "descricao": "Ponto de água fria com tubo PVC soldável até Ø20mm, embutido, inclui ramal",
+      "unidade": "pt",
+      "custo_total": 81.0,
+      "mo": 32.4,
+      "material": 48.6
+    },
+    {
+      "codigo": "93358",
+      "descricao": "Tomada elétrica 2P+T, 10A, embutida, inclui caixa e tampa cega",
+      "unidade": "pt",
+      "custo_total": 47.4,
+      "mo": 28.5,
+      "material": 18.9
+    },
+    {
+      "codigo": "93359",
+      "descricao": "Eletroduto PVC rígido Ø20mm embutido em parede ou laje, inclui conexões",
+      "unidade": "m",
+      "custo_total": 15.0,
+      "mo": 8.2,
+      "material": 6.8
+    },
+    {
+      "codigo": "87551",
+      "descricao": "Telha cerâmica capa-canal, fornecimento e assentamento, inclui cumeeira",
+      "unidade": "m²",
+      "custo_total": 57.0,
+      "mo": 18.6,
+      "material": 38.4
+    },
+    {
+      "codigo": "74252",
+      "descricao": "Impermeabilização com manta asfáltica 3mm em superfície horizontal",
+      "unidade": "m²",
+      "custo_total": 58.4,
+      "mo": 15.8,
+      "material": 42.6
+    },
+    {
+      "codigo": "74128",
+      "descricao": "Porta de madeira maciça, lisa, 0.80x2.10m, com alizares e dobradiças",
+      "unidade": "un",
+      "custo_total": 353.0,
+      "mo": 68.0,
+      "material": 285.0
+    },
+    {
+      "codigo": "74130",
+      "descricao": "Janela de alumínio de correr, 1.20x1.00m, anodizado, com vidro 4mm",
+      "unidade": "un",
+      "custo_total": 365.0,
+      "mo": 45.0,
+      "material": 320.0
+    }
+  ]
+}

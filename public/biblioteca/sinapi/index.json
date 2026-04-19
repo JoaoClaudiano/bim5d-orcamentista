@@ -1,0 +1,16 @@
+{
+  "versao": "1.0.0",
+  "descricao": "Índice da biblioteca de composições SINAPI por estado e mês de referência",
+  "fonte": "SINAPI CAIXA — tabela sintética de composições (dados educacionais/demonstração)",
+  "atualizado_em": "2024-03-01",
+  "datasets": [
+    { "estado": "CE", "referencia": "2024-03", "arquivo": "CE_2024-03.json" },
+    { "estado": "SP", "referencia": "2024-03", "arquivo": "SP_2024-03.json" },
+    { "estado": "RJ", "referencia": "2024-03", "arquivo": "RJ_2024-03.json" },
+    { "estado": "MG", "referencia": "2024-03", "arquivo": "MG_2024-03.json" },
+    { "estado": "RS", "referencia": "2024-03", "arquivo": "RS_2024-03.json" },
+    { "estado": "BA", "referencia": "2024-03", "arquivo": "BA_2024-03.json" },
+    { "estado": "PE", "referencia": "2024-03", "arquivo": "PE_2024-03.json" },
+    { "estado": "DF", "referencia": "2024-03", "arquivo": "DF_2024-03.json" }
+  ]
+}

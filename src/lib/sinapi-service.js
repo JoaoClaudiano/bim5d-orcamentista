@@ -1,9 +1,10 @@
 // src/lib/sinapi-service.js
 // Serviço de carregamento da base SINAPI
-// Prioridade: Supabase (tabela sinapi_composicoes) → fallback para dados locais estáticos
+// Prioridade: Supabase → biblioteca local (public/biblioteca/sinapi/) → dados estáticos
 
 import { supabase } from './supabase'
 import { SINAPI_DB as localDB } from './sinapi-local-db'
+import { carregarBiblioteca } from './biblioteca-service'
 import { logError } from './telemetry'
 
 // Cache em memória para a sessão (evita múltiplas consultas ao Supabase)
@@ -21,7 +22,12 @@ export async function carregarSinapiDB(estado = 'CE', referencia = '2024-03') {
   const key = `${estado}:${referencia}`
   if (_cache[key]) return _cache[key]
 
-  if (!supabase) return localDB
+  if (!supabase) {
+    // Sem Supabase: tentar biblioteca local, depois fallback estático
+    const bibliotecaDB = await carregarBiblioteca(estado, referencia)
+    if (bibliotecaDB) { _cache[key] = bibliotecaDB; return bibliotecaDB }
+    return localDB
+  }
 
   try {
     const { data, error } = await supabase
@@ -36,7 +42,12 @@ export async function carregarSinapiDB(estado = 'CE', referencia = '2024-03') {
     }
 
     if (!data?.length) {
-      // Dados ainda não importados para esta UF/referência — usar local
+      // Dados ainda não importados para esta UF/referência — tentar biblioteca local
+      const bibliotecaDB = await carregarBiblioteca(estado, referencia)
+      if (bibliotecaDB) {
+        _cache[key] = bibliotecaDB
+        return bibliotecaDB
+      }
       return localDB
     }
 
@@ -57,7 +68,9 @@ export async function carregarSinapiDB(estado = 'CE', referencia = '2024-03') {
     return db
   } catch (e) {
     logError('sinapi_fetch_exception', e.message, { estado, referencia })
-    return localDB
+    // Tentar biblioteca local antes de usar dados estáticos CE
+    const bibliotecaDB = await carregarBiblioteca(estado, referencia)
+    return bibliotecaDB ?? localDB
   }
 }
 
