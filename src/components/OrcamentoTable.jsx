@@ -20,10 +20,13 @@ function fmt(n) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0)
 }
 
-export default function OrcamentoTable({ itens, onEditar }) {
+export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
   const [sortField, setSortField] = useState('fase')
   const [sortDir,   setSortDir]   = useState('asc')
   const [filtro,    setFiltro]    = useState('')
+  const [editando,  setEditando]  = useState(null)
+  const [codigo,    setCodigo]    = useState('')
+  const [salvando,  setSalvando]  = useState(false)
 
   const toggleSort = (field) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -61,6 +64,21 @@ export default function OrcamentoTable({ itens, onEditar }) {
   )
 
   const semCorrespondencia = itens.filter(i => i.confianca === 'baixa').length
+
+  async function confirmarCorrecao(item, indexReal) {
+    if (!onCorrigirDepara) return
+    const codigoFinal = codigo.trim()
+    if (!codigoFinal) return
+
+    setSalvando(true)
+    try {
+      await onCorrigirDepara(item, indexReal, codigoFinal)
+      setEditando(null)
+      setCodigo('')
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   return (
     <div className="animate-fade-in">
@@ -100,49 +118,90 @@ export default function OrcamentoTable({ itens, onEditar }) {
             </tr>
           </thead>
           <tbody>
-            {itensFiltrados.map((item, i) => (
-              <tr
-                key={i}
-                className={`
-                  border-b border-white/5 animate-fade-in stagger-row
-                  transition-colors hover:bg-brand-950/40
-                  ${item.confianca === 'baixa' ? 'bg-red-950/10' : ''}
-                `}
-              >
-                <td className="px-3 py-2.5 text-white/80 max-w-[160px] truncate" title={item.categoria}>
-                  {item.categoria}
-                </td>
-                <td className="px-3 py-2.5 font-mono">
-                  {item.codigo ? (
-                    <span className="text-brand-400 font-medium">{item.codigo}</span>
-                  ) : (
-                    <span className="text-white/20">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-white/60 max-w-[260px] text-xs leading-tight" title={item.desc}>
-                  <span className="line-clamp-2">{item.desc}</span>
-                </td>
-                <td className="px-3 py-2.5 text-white/50 text-xs text-center">{item.unidade}</td>
-                <td className="px-3 py-2.5 text-right text-white/80 tabular-nums">
-                  {item.quantidade?.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
-                </td>
-                <td className="px-3 py-2.5 text-right text-white/60 tabular-nums text-xs">
-                  {item.custo_unitario > 0 ? fmt(item.custo_unitario) : <span className="text-white/20">—</span>}
-                </td>
-                <td className="px-3 py-2.5 text-right font-medium tabular-nums">
-                  {item.custo_total > 0
-                    ? <span className="text-white">{fmt(item.custo_total)}</span>
-                    : <span className="text-white/20">—</span>
-                  }
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className="text-xs px-2 py-0.5 rounded-md bg-white/5 text-white/50">{item.fase}</span>
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  <Badge confianca={item.confianca} />
-                </td>
-              </tr>
-            ))}
+            {itensFiltrados.map((item, i) => {
+              const indexReal = itens.indexOf(item)
+              return (
+                <tr
+                  key={i}
+                  className={`
+                    border-b border-white/5 animate-fade-in stagger-row
+                    transition-colors hover:bg-brand-950/40
+                    ${item.confianca === 'baixa' ? 'bg-red-950/10' : ''}
+                  `}
+                >
+                  <td className="px-3 py-2.5 text-white/80 max-w-[160px] truncate" title={item.categoria}>
+                    {item.categoria}
+                  </td>
+                  <td className="px-3 py-2.5 font-mono">
+                    {item.codigo ? (
+                      <span className="text-brand-400 font-medium">{item.codigo}</span>
+                    ) : (
+                      <span className="text-white/20">—</span>
+                    )}
+
+                    {item.confianca === 'baixa' && onCorrigirDepara && (
+                      <div className="mt-1">
+                        {editando === indexReal ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              value={codigo}
+                              onChange={(e) => setCodigo(e.target.value)}
+                              placeholder="Código"
+                              className="w-20 px-1.5 py-1 rounded bg-white/5 border border-white/15 text-[11px] text-white/80 outline-none focus:border-brand-500/60"
+                            />
+                            <button
+                              onClick={() => confirmarCorrecao(item, indexReal)}
+                              disabled={salvando}
+                              className="text-[11px] px-1.5 py-1 rounded bg-brand-700/30 border border-brand-600/40 text-brand-200 hover:bg-brand-700/40 disabled:opacity-50"
+                            >
+                              Salvar
+                            </button>
+                            <button
+                              onClick={() => { setEditando(null); setCodigo('') }}
+                              className="text-[11px] px-1.5 py-1 rounded glass text-white/60"
+                            >
+                              X
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditando(indexReal)
+                              setCodigo('')
+                            }}
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-yellow-900/25 border border-yellow-700/30 text-yellow-200 hover:bg-yellow-900/35"
+                          >
+                            Corrigir
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-white/60 max-w-[260px] text-xs leading-tight" title={item.desc}>
+                    <span className="line-clamp-2">{item.desc}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-white/50 text-xs text-center">{item.unidade}</td>
+                  <td className="px-3 py-2.5 text-right text-white/80 tabular-nums">
+                    {item.quantidade?.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-white/60 tabular-nums text-xs">
+                    {item.custo_unitario > 0 ? fmt(item.custo_unitario) : <span className="text-white/20">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-medium tabular-nums">
+                    {item.custo_total > 0
+                      ? <span className="text-white">{fmt(item.custo_total)}</span>
+                      : <span className="text-white/20">—</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className="text-xs px-2 py-0.5 rounded-md bg-white/5 text-white/50">{item.fase}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <Badge confianca={item.confianca} />
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
