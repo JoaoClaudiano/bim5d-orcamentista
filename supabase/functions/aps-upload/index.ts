@@ -37,7 +37,7 @@ async function getApsToken(): Promise<string> {
     }),
   })
 
-  if (!resp.ok) throw new Error(`APS auth falhou: ${resp.status} ${await resp.text()}`)
+  if (!resp.ok) throw new Error(`APS auth falhou: ${resp.status} ${await resp.text().catch(() => resp.statusText)}`)
   const data = await resp.json()
   return data.access_token
 }

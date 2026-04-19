@@ -5,6 +5,7 @@
 const HORAS_POR_DIA_PADRAO = 8
 
 // Ordem padrão das fases construtivas
+// 'Personalizado' é usado quando o usuário define uma fase manualmente no De-Para
 const ORDEM_FASES = [
   'Fundação',
   'Estrutura',
