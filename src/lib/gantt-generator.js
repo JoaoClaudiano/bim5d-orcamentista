@@ -2,7 +2,6 @@
 // Gera cronograma de obra (4D) a partir dos itens de orçamento + produtividade SINAPI
 
 const HORAS_POR_DIA_PADRAO = 8
-const _DIAS_POR_SEMANA     = 5 // segunda a sexta (referência; weekend skipping usa getDay())
 
 // Ordem padrão das fases construtivas
 const ORDEM_FASES = [

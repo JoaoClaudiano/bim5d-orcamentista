@@ -15,7 +15,7 @@ const _session = {
  * @param {Object} [ctx]  - Contexto adicional (estado, arquivo, etc.)
  */
 export function logError(type, detail, ctx = {}) {
-  const entry = { type, detail, ...ctx, ts: Date.now() }
+  const entry = { type, detail, ...ctx, timestamp: Date.now() }
   _session.errors.push(entry)
   console.warn('[BIM5D]', type, detail, ctx)
 }
@@ -32,7 +32,7 @@ export function logError(type, detail, ctx = {}) {
  */
 export function logProcessing({ totalRows, mappedRows, unmappedRows, ms, estado, referencia }) {
   const matchRate = totalRows > 0 ? Math.round((mappedRows / totalRows) * 100) : 0
-  const entry = { totalRows, mappedRows, unmappedRows, matchRate, ms, estado, referencia, ts: Date.now() }
+  const entry = { totalRows, mappedRows, unmappedRows, matchRate, ms, estado, referencia, timestamp: Date.now() }
   _session.processingRuns.push(entry)
   console.info(
     `[BIM5D] Processamento: ${mappedRows}/${totalRows} composições mapeadas (${matchRate}%) em ${ms}ms [SINAPI ${estado} ${referencia}]`,
