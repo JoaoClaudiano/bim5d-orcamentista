@@ -24,7 +24,7 @@ export async function listarProjetos() {
     return data ?? []
   } catch (error) {
     console.error('Erro ao listar projetos:', error)
-    throw new Error('Não foi possível carregar os projetos.')
+    throw new Error('Não foi possível carregar os projetos.', { cause: error })
   }
 }
 
@@ -54,7 +54,7 @@ export async function salvarProjeto({ id, nome, arquivoNome, itens, cronograma }
     return data
   } catch (error) {
     console.error('Erro ao salvar projeto:', error)
-    throw new Error('Não foi possível salvar o projeto.')
+    throw new Error('Não foi possível salvar o projeto.', { cause: error })
   }
 }
 
@@ -75,6 +75,6 @@ export async function deletarProjeto(id) {
     return true
   } catch (error) {
     console.error('Erro ao deletar projeto:', error)
-    throw new Error('Não foi possível deletar o projeto.')
+    throw new Error('Não foi possível deletar o projeto.', { cause: error })
   }
 }
