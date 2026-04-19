@@ -6,6 +6,7 @@ import ResumoCards from './components/ResumoCards'
 import GanttChart from './components/GanttChart'
 import FaseChart from './components/FaseChart'
 import ProjetosSidebar from './components/ProjetosSidebar'
+import EstadoSelector from './components/EstadoSelector'
 import { useAuth } from './components/AuthGate'
 import { useDepara } from './hooks/useDepara'
 import { parseRevitFile, gerarCSVDemo } from './lib/revit-parser'
@@ -14,6 +15,8 @@ import { gerarCronograma } from './lib/gantt-generator'
 import { exportarExcel, exportarCSV } from './lib/export'
 import { deletarProjeto, listarProjetos, salvarProjeto } from './lib/projetos-service'
 import { atingiuLimiteProjetos, obterPlanoUsuario, PLANOS } from './lib/planos'
+import { carregarSinapiDB } from './lib/sinapi-service'
+import { logError, logProcessing } from './lib/telemetry'
 
 const TABS = [
   { id: 'orcamento', label: 'Orçamento', icon: '₿' },
@@ -36,6 +39,15 @@ export default function App() {
   const [loadingProjetos, setLoadingProjetos] = useState(false)
   const [projetoAtualId, setProjetoAtualId] = useState(null)
   const [limiteAtingido, setLimiteAtingido] = useState(false)
+
+  // SINAPI — UF, mês de referência e base carregada
+  const [estado, setEstado] = useState('CE')
+  const [referencia, setReferencia] = useState('2024-03')
+  const [sinapiDB, setSinapiDB] = useState(null)
+  const [loadingSinapi, setLoadingSinapi] = useState(false)
+
+  // Data de início do cronograma (Gantt)
+  const [dataInicio, setDataInicio] = useState(() => new Date().toISOString().split('T')[0])
 
   const planoUsuario = useMemo(() => obterPlanoUsuario(user), [user])
 
@@ -61,6 +73,24 @@ export default function App() {
     carregarProjetos()
   }, [user])
 
+  // Carrega a base SINAPI sempre que estado ou referência mudar
+  useEffect(() => {
+    let cancelled = false
+    async function loadSinapi() {
+      setLoadingSinapi(true)
+      try {
+        const db = await carregarSinapiDB(estado, referencia)
+        if (!cancelled) setSinapiDB(db)
+      } catch (e) {
+        logError('sinapi_load', e.message, { estado, referencia })
+      } finally {
+        if (!cancelled) setLoadingSinapi(false)
+      }
+    }
+    loadSinapi()
+    return () => { cancelled = true }
+  }, [estado, referencia])
+
   async function mapearItens(revitData) {
     const resultado = []
 
@@ -70,6 +100,7 @@ export default function App() {
         row.quantidade,
         row.unidade,
         depara,
+        sinapiDB || undefined,
       )
       resultado.push(...mapeados)
     }
@@ -77,10 +108,17 @@ export default function App() {
     return resultado
   }
 
+  function resolverDataInicio() {
+    // Usa a data selecionada pelo usuário; cria no meio-dia para evitar
+    // ambiguidade de fuso horário ao converter de string ISO
+    return dataInicio ? new Date(`${dataInicio}T12:00:00`) : new Date()
+  }
+
   function atualizarEstadoProjeto(nomeArquivo, mapeados) {
     setItens(mapeados)
 
-    const { tarefas, totalDias, dataFim } = gerarCronograma(mapeados, new Date())
+    const startDate = resolverDataInicio()
+    const { tarefas, totalDias, dataFim } = gerarCronograma(mapeados, startDate)
     setCronograma({ tarefas, totalDias, dataFim })
 
     setFileName(nomeArquivo)
@@ -118,17 +156,32 @@ export default function App() {
     setErro(null)
     setLimiteAtingido(false)
     setLoading(true)
+    const t0 = performance.now()
 
     try {
       const revitData = await parseRevitFile(file)
       if (!revitData.length) {
-        setErro('O arquivo está vazio ou no formato incorreto. Use o Schedule do Revit.')
+        setErro(
+          'Nenhum dado encontrado no arquivo. ' +
+          'Certifique-se de exportar o Schedule pelo Revit com as colunas Category, Family e uma coluna de quantidade (Area, Volume ou Count).',
+        )
         return
       }
 
       const mapeados = await mapearItens(revitData)
       const cronogramaGerado = atualizarEstadoProjeto(file.name, mapeados)
       setProjetoAtualId(null)
+
+      // Telemetria
+      const unmapped = mapeados.filter(i => i.confianca === 'baixa').length
+      logProcessing({
+        totalRows: revitData.length,
+        mappedRows: mapeados.length - unmapped,
+        unmappedRows: unmapped,
+        ms: Math.round(performance.now() - t0),
+        estado,
+        referencia,
+      })
 
       await tentarSalvarProjetoNovo({
         nome: file.name,
@@ -137,6 +190,7 @@ export default function App() {
         cronogramaProjeto: cronogramaGerado,
       })
     } catch (e) {
+      logError('process_file', e.message, { fileName: file?.name })
       setErro(e.message)
     } finally {
       setLoading(false)
@@ -198,6 +252,7 @@ export default function App() {
         item.quantidade,
         item.unidade,
         [{ categoria: item.categoria, codigo_sinapi: codigo, codigo }],
+        sinapiDB || undefined,
       )
 
       const novoItem = {
@@ -209,7 +264,7 @@ export default function App() {
       const novosItens = itens.map((atual, i) => (i === index ? novoItem : atual))
       setItens(novosItens)
 
-      const novoCronograma = gerarCronograma(novosItens, new Date())
+      const novoCronograma = gerarCronograma(novosItens, resolverDataInicio())
       setCronograma(novoCronograma)
 
       if (user && projetoAtualId) {
@@ -249,8 +304,28 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-white/30">
-            <span className="px-2 py-1 rounded-md bg-white/5 border border-white/8">SINAPI CE / Mar 2024</span>
+          <div className="flex items-center gap-2 text-xs text-white/30 flex-wrap">
+            <EstadoSelector
+              estado={estado}
+              referencia={referencia}
+              loading={loadingSinapi}
+              onChange={({ estado: uf, referencia: ref }) => {
+                setEstado(uf)
+                setReferencia(ref)
+              }}
+            />
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/20 hidden sm:inline">Início:</span>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={e => setDataInicio(e.target.value)}
+                aria-label="Data de início da obra"
+                className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 text-xs outline-none focus:border-brand-500/60 cursor-pointer"
+              />
+            </div>
+
             <a
               href="https://github.com"
               target="_blank"

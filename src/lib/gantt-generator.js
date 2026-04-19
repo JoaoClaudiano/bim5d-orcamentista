@@ -1,8 +1,8 @@
 // src/lib/gantt-generator.js
 // Gera cronograma de obra (4D) a partir dos itens de orçamento + produtividade SINAPI
 
-const HORAS_POR_DIA    = 8
-const DIAS_POR_SEMANA  = 5 // segunda a sexta
+const HORAS_POR_DIA_PADRAO = 8
+const _DIAS_POR_SEMANA     = 5 // segunda a sexta (referência; weekend skipping usa getDay())
 
 // Ordem padrão das fases construtivas
 const ORDEM_FASES = [
@@ -18,24 +18,28 @@ const ORDEM_FASES = [
 
 /**
  * Calcula duração em dias úteis para um item
+ * @param {Object} item          - Item do orçamento
+ * @param {number} horasPorDia   - Horas de trabalho por dia (padrão: 8)
  */
-function calcularDuracaoItem(item) {
+function calcularDuracaoItem(item, horasPorDia = HORAS_POR_DIA_PADRAO) {
   const prod = item.produtividade
   if (!prod || !item.quantidade || item.quantidade === 0) {
-    // Estimativa padrão: 1 dia por item sem dados de produtividade
     return 1
   }
   const horas = item.quantidade / prod.valor
-  return Math.max(1, Math.ceil(horas / HORAS_POR_DIA))
+  return Math.max(1, Math.ceil(horas / horasPorDia))
 }
 
 /**
  * Gera o cronograma completo da obra
- * @param {Array} itens - itens do orçamento já mapeados
- * @param {Date}  dataInicio - data de início da obra
- * @returns {Array} tarefas do Gantt com datas de início e fim
+ * @param {Array}  itens      - Itens do orçamento já mapeados
+ * @param {Date}   dataInicio - Data de início da obra
+ * @param {Object} [config]   - Configurações opcionais
+ * @param {number} [config.horasPorDia=8] - Horas de trabalho por dia
+ * @returns {{ tarefas: Array, totalDias: number, dataFim: Date }}
  */
-export function gerarCronograma(itens, dataInicio = new Date()) {
+export function gerarCronograma(itens, dataInicio = new Date(), config = {}) {
+  const { horasPorDia = HORAS_POR_DIA_PADRAO } = config
   // Agrupa por fase
   const porFase = {}
   for (const item of itens) {
@@ -60,7 +64,7 @@ export function gerarCronograma(itens, dataInicio = new Date()) {
     let maxDiaFase = diaAtual
 
     for (const item of itensFase) {
-      const duracao = calcularDuracaoItem(item)
+      const duracao = calcularDuracaoItem(item, horasPorDia)
       const inicio  = diaUtilParaData(dataInicio, diaAtual)
       const fim     = diaUtilParaData(dataInicio, diaAtual + duracao)
 

@@ -77,7 +77,6 @@ export function useDepara() {
         .single()
 
       if (error) throw error
-
       setDepara(prev => {
         const semAtual = prev.filter(item => item.categoria_normalizada !== categoriaNormalizada)
         return [data, ...semAtual]
@@ -86,7 +85,7 @@ export function useDepara() {
       return data
     } catch (error) {
       console.error('Erro ao salvar De-Para customizado:', error)
-      throw new Error('Não foi possível salvar a correção.')
+      throw new Error('Não foi possível salvar a correção.', { cause: error })
     }
   }, [])
 
@@ -113,7 +112,7 @@ export function useDepara() {
       return true
     } catch (error) {
       console.error('Erro ao remover De-Para customizado:', error)
-      throw new Error('Não foi possível remover a correção.')
+      throw new Error('Não foi possível remover a correção.', { cause: error })
     }
   }, [])
 

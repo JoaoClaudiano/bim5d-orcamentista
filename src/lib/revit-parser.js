@@ -5,11 +5,8 @@ import * as XLSX from 'xlsx'
 /**
  * Infere a unidade de medida a partir dos campos da linha
  */
-function inferUnit(row) {
-  const keys = Object.keys(row).map(k => k.toLowerCase())
-  const vals = Object.entries(row)
-
-  for (const [k, v] of vals) {
+export function inferUnit(row) {
+  for (const [k] of Object.entries(row)) {
     const kl = k.toLowerCase()
     if (kl.includes('volume') || kl.includes('m³') || kl.includes('m3')) return 'm³'
     if (kl.includes('area')   || kl.includes('área') || kl.includes('m²') || kl.includes('m2')) return 'm²'
@@ -21,34 +18,42 @@ function inferUnit(row) {
 /**
  * Extrai o valor numérico da quantidade, removendo unidades e formatação brasileira
  */
-function parseQuantidade(val) {
+export function parseQuantidade(val) {
   if (!val && val !== 0) return 0
   const str = String(val)
-    .replace(/[^\d.,]/g, '')   // remove letras e símbolos
-    .replace(/\.(?=\d{3})/g, '') // separador de milhar BR
-    .replace(',', '.')           // decimal BR
+    .replace(/[^\d.,]/g, '')      // remove letras e símbolos
+    .replace(/\.(?=\d{3})/g, '')  // separador de milhar BR (ex: 1.234 → 1234)
+    .replace(',', '.')             // decimal BR
   return parseFloat(str) || 0
 }
 
 /**
- * Detecta qual campo contém a quantidade principal
+ * Detecta qual campo contém a quantidade principal usando sistema de pontuação
  */
-function detectQuantidadeField(headers) {
-  const priority = [
-    'area', 'área', 'volume', 'length', 'comprimento',
-    'count', 'contagem', 'quantidade', 'quantity', 'perimeter', 'perímetro',
-  ]
-  for (const p of priority) {
-    const found = headers.find(h => h.toLowerCase().includes(p))
-    if (found) return found
-  }
+export function detectQuantidadeField(headers) {
+  const scored = headers.map(h => {
+    const hl = h.toLowerCase()
+    let score = 0
+    if (hl.includes('m²') || hl.includes('m2'))                           score = 98
+    else if (hl.includes('area') || hl.includes('área'))                   score = 95
+    else if (hl.includes('m³') || hl.includes('m3'))                       score = 90
+    else if (hl.includes('volume'))                                         score = 88
+    else if (hl.includes('length') || hl.includes('comprimento'))          score = 80
+    else if (hl.includes('count') || hl.includes('contagem'))              score = 70
+    else if (hl.includes('quantidade') || hl.includes('quantity'))        score = 65
+    else if (hl.includes('perimeter') || hl.includes('perímetro'))        score = 60
+    return { h, score }
+  })
+
+  const best = scored.sort((a, b) => b.score - a.score)[0]
+  if (best.score > 0) return best.h
   return headers[headers.length - 1] // último campo como fallback
 }
 
 /**
  * Detecta qual campo contém a categoria/nome do elemento
  */
-function detectCategoriaField(headers) {
+export function detectCategoriaField(headers) {
   const candidates = [
     'category', 'categoria', 'family', 'família', 'familia',
     'type', 'tipo', 'description', 'descrição', 'name', 'nome',
@@ -85,6 +90,8 @@ function normalizeRows(data) {
 
 /**
  * Faz parse de arquivo CSV exportado do Revit
+ * Detecta automaticamente o delimitador (`,`, `;`, `\t`, `|`) e
+ * remove o BOM UTF-8 quando presente.
  */
 export function parseRevitCSV(file) {
   return new Promise((resolve, reject) => {
@@ -92,14 +99,26 @@ export function parseRevitCSV(file) {
       header: true,
       skipEmptyLines: 'greedy',
       encoding: 'UTF-8',
+      delimiter: '',      // auto-detect: ',', ';', '\t', '|'
+      transformHeader: h => h.replace(/^\uFEFF/, '').trim(), // strip BOM do header
       complete: ({ data, errors }) => {
         if (errors.length && !data.length) {
-          reject(new Error('Erro ao processar CSV: ' + errors[0]?.message))
+          reject(new Error(
+            `Erro ao processar CSV: ${errors[0]?.message}. ` +
+            'Certifique-se de exportar o Schedule pelo Revit em File → Export → Reports → Schedule.',
+          ))
+          return
+        }
+        if (!data.length) {
+          reject(new Error(
+            'Arquivo CSV vazio ou sem linhas de dados. ' +
+            'Verifique se o Schedule foi exportado corretamente com as colunas Category, Family e uma coluna de quantidade.',
+          ))
           return
         }
         resolve(normalizeRows(data))
       },
-      error: (err) => reject(new Error(err.message)),
+      error: (err) => reject(new Error(`Falha ao ler arquivo CSV: ${err.message}`)),
     })
   })
 }
@@ -112,15 +131,22 @@ export function parseRevitExcel(file) {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const wb   = XLSX.read(e.target.result, { type: 'array' })
+        const wb    = XLSX.read(e.target.result, { type: 'array' })
         const sheet = wb.Sheets[wb.SheetNames[0]]
         const data  = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+        if (!data.length) {
+          reject(new Error(
+            'Planilha Excel sem dados. ' +
+            'Verifique se a primeira aba contém o Schedule exportado pelo Revit.',
+          ))
+          return
+        }
         resolve(normalizeRows(data))
       } catch (err) {
-        reject(new Error('Erro ao processar Excel: ' + err.message))
+        reject(new Error(`Erro ao processar Excel: ${err.message}`))
       }
     }
-    reader.onerror = () => reject(new Error('Erro ao ler arquivo'))
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo. Verifique se está corrompido.'))
     reader.readAsArrayBuffer(file)
   })
 }
@@ -130,12 +156,14 @@ export function parseRevitExcel(file) {
  */
 export async function parseRevitFile(file) {
   const ext = file.name.split('.').pop().toLowerCase()
-  if (ext === 'csv') {
+  if (ext === 'csv' || ext === 'txt') {
     return parseRevitCSV(file)
   } else if (['xlsx', 'xls'].includes(ext)) {
     return parseRevitExcel(file)
   }
-  throw new Error('Formato não suportado. Use CSV ou Excel (.xlsx).')
+  throw new Error(
+    `Formato ".${ext}" não suportado. Use CSV (.csv) ou Excel (.xlsx) exportado pelo Revit.`,
+  )
 }
 
 /**

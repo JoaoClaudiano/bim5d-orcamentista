@@ -1,10 +1,11 @@
 # BIM 5D — Orçamentista Web Inteligente
 
-> Cruzamento automatizado de quantitativos do **Revit** com a tabela **SINAPI (CAIXA)** — com cronograma 4D e preparado para visualizador BIM 3D.
+> Cruzamento automatizado de quantitativos do **Revit** com a tabela **SINAPI (CAIXA)** — com cronograma 4D, persistência de projetos e base de dados configurável por estado e mês de referência.
 
 ![MIT License](https://img.shields.io/badge/license-MIT-blue)
 ![Vite](https://img.shields.io/badge/vite-5.x-purple)
 ![React](https://img.shields.io/badge/react-18-blue)
+![Vitest](https://img.shields.io/badge/tests-68_passing-green)
 
 ---
 
@@ -17,6 +18,13 @@ Uma aplicação web que transforma o Schedule exportado pelo Revit (CSV ou Excel
 - ✅ Cronograma 4D (Gráfico de Gantt) calculado pela produtividade SINAPI
 - ✅ Distribuição de custos por fase da obra
 - ✅ Exportação Excel (.xlsx) com 3 abas: Orçamento, Resumo por Fase e De-Para
+- ✅ Exportação CSV
+- ✅ Autenticação com Google via Supabase
+- ✅ Persistência de projetos por usuário no Supabase
+- ✅ De-Para customizado (usuário corrige e salva no Supabase)
+- ✅ Seletor de UF e mês de referência SINAPI (base Supabase ou fallback local)
+- ✅ Configuração de data de início do cronograma
+- ✅ Plano Free (3 projetos) e Pro (ilimitado)
 - 🔜 Visualizador BIM 3D (Autodesk Platform Services / Forge)
 - 🔜 IA para sugestão de composições via embeddings
 
@@ -28,10 +36,11 @@ Uma aplicação web que transforma o Schedule exportado pelo Revit (CSV ou Excel
 |--------|-----------|
 | Frontend | React 18 + Vite 5 |
 | Estilo | Tailwind CSS 3 |
-| Parser CSV | PapaParse |
+| Parser CSV | PapaParse (auto-detect delimitador) |
 | Parser Excel | SheetJS (xlsx) |
+| Backend / Auth | Supabase (Auth, projetos, de-para custom, SINAPI por estado) |
+| Testes | Vitest 2 + jsdom |
 | Deploy | GitHub Pages (Actions) |
-| Backend (futuro) | Supabase (tabela SINAPI por estado) |
 
 ---
 
@@ -45,11 +54,23 @@ cd bim5d-orcamentista
 # 2. Instale as dependências
 npm install
 
-# 3. Inicie o servidor de desenvolvimento
+# 3. Configure o Supabase (opcional — funciona sem, com dados locais)
+cp .env.example .env
+# Edite .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY
+
+# 4. Inicie o servidor de desenvolvimento
 npm run dev
 ```
 
 Abra `http://localhost:5173` no navegador.
+
+### Testes e lint
+
+```bash
+npm run test      # executa os testes unitários (68 testes)
+npm run lint      # ESLint com regras React
+npm run coverage  # relatório de cobertura
+```
 
 ---
 
@@ -71,6 +92,35 @@ Basta ativar o GitHub Pages no repositório:
 npm run build
 # Os arquivos ficam em /dist — faça upload manual ou use:
 npx gh-pages -d dist
+```
+
+---
+
+## Configurando o Supabase
+
+### 1. Criar projeto no Supabase
+
+1. Acesse [supabase.com](https://supabase.com) e crie um projeto
+2. Copie a **URL** e a **anon key** do projeto
+3. Crie o arquivo `.env` baseado em `.env.example`
+
+### 2. Aplicar migrations
+
+```bash
+# Com o Supabase CLI:
+supabase db push
+
+# Ou execute manualmente no SQL Editor do Supabase:
+# supabase/migrations/001_initial.sql     — tabela projetos
+# supabase/migrations/002_depara.sql      — tabela depara_custom
+# supabase/migrations/003_sinapi_composicoes.sql  — tabela SINAPI por estado/mês
+```
+
+### 3. Popular dados SINAPI iniciais
+
+```bash
+# Execute o seed (CE, mar/2024) no SQL Editor do Supabase:
+# supabase/seed.sql
 ```
 
 ---
@@ -97,23 +147,40 @@ Clique em **"usar dados de demonstração"** na tela inicial — o sistema gera 
 bim5d-orcamentista/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml          ← CI/CD automático
+│       └── deploy.yml              ← CI/CD automático
+├── supabase/
+│   ├── migrations/
+│   │   ├── 001_initial.sql         ← tabela projetos
+│   │   ├── 002_depara.sql          ← tabela depara_custom
+│   │   └── 003_sinapi_composicoes.sql ← tabela SINAPI por estado/mês
+│   └── seed.sql                    ← dados iniciais CE/2024-03
 ├── src/
 │   ├── lib/
-│   │   ├── sinapi-mapper.js    ← Motor de mapeamento De-Para
-│   │   ├── revit-parser.js     ← Parser CSV / Excel
-│   │   ├── gantt-generator.js  ← Cronograma 4D
-│   │   └── export.js           ← Exportação Excel / CSV
+│   │   ├── sinapi-local-db.js      ← dados SINAPI estáticos (fallback)
+│   │   ├── sinapi-mapper.js        ← motor De-Para
+│   │   ├── sinapi-service.js       ← carrega SINAPI do Supabase (cache + fallback)
+│   │   ├── revit-parser.js         ← parser CSV/Excel com auto-detect
+│   │   ├── gantt-generator.js      ← cronograma 4D configurável
+│   │   ├── export.js               ← exportação Excel/CSV
+│   │   ├── telemetry.js            ← métricas de sessão
+│   │   ├── projetos-service.js     ← CRUD projetos no Supabase
+│   │   ├── planos.js               ← lógica de planos (Free/Pro)
+│   │   └── __tests__/             ← testes unitários (Vitest)
 │   ├── components/
 │   │   ├── UploadZone.jsx
 │   │   ├── OrcamentoTable.jsx
 │   │   ├── ResumoCards.jsx
 │   │   ├── GanttChart.jsx
-│   │   └── FaseChart.jsx
+│   │   ├── FaseChart.jsx
+│   │   ├── ProjetosSidebar.jsx
+│   │   ├── EstadoSelector.jsx      ← seletor UF + referência SINAPI
+│   │   └── AuthGate.jsx
+│   ├── hooks/
+│   │   └── useDepara.js
 │   ├── App.jsx
 │   ├── main.jsx
 │   └── index.css
-├── index.html
+├── eslint.config.js
 ├── vite.config.js
 ├── tailwind.config.js
 └── package.json
@@ -123,62 +190,63 @@ bim5d-orcamentista/
 
 ## Adicionando composições SINAPI
 
-O arquivo `src/lib/sinapi-mapper.js` contém dois objetos para editar:
+### Via Supabase (recomendado em produção)
 
-### 1. `SINAPI_DB` — base de composições
+Insira linhas na tabela `sinapi_composicoes`:
 
-```js
-'87503': {
-  codigo: '87503',
-  desc: 'Alvenaria de vedação de blocos cerâmicos...',
-  unidade: 'm²',
-  custo_total: 62.18,
-  mo: 28.45,
-  material: 33.73,
-  estado: 'CE',
-},
+```sql
+insert into sinapi_composicoes (codigo, descricao, unidade, custo_total, mo, material, estado, referencia)
+values ('87503', 'Alvenaria de vedação...', 'm²', 62.18, 28.45, 33.73, 'SP', '2024-06');
 ```
 
-Adicione quantas composições precisar. Os preços estão na tabela SINAPI disponível em:  
-👉 https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx
+A aplicação usará automaticamente os dados do Supabase para a UF/mês selecionados na interface, com fallback para os dados locais (CE/2024-03) se não houver dados no banco.
 
-### 2. `DE_PARA` — mapeamento de palavras-chave
+### Via código (fallback local)
 
-```js
-{
-  keywords: ['basic wall', 'wall', 'parede', 'alvenaria'],
-  codigos: ['87503'],
-  fase: 'Alvenaria',
-},
-```
-
-Adicione entradas para mapear automaticamente as categorias do seu modelo Revit.
+Edite `src/lib/sinapi-local-db.js` para adicionar composições ao fallback local.
 
 ---
 
 ## Roadmap
 
-### MVP (atual)
+### Fase 1 — Produto confiável ✅
 - [x] Upload CSV / Excel do Revit
+- [x] Auto-detect delimitador CSV (`,`, `;`, `\t`, `|`)
 - [x] Motor de mapeamento De-Para
 - [x] Orçamento com MO + Material
-- [x] Cronograma 4D (Gantt)
-- [x] Exportação Excel
+- [x] Cronograma 4D (Gantt) com data de início configurável
+- [x] Exportação Excel + CSV
 - [x] Deploy GitHub Pages
+- [x] ESLint + Vitest (68 testes unitários)
+- [x] Telemetria de sessão (taxa de mapeamento, erros, tempo)
 
-### Fase 2 — Backend
-- [ ] Integração com Supabase (tabela SINAPI completa por estado e mês)
-- [ ] Sistema de De-Para persistente (usuário corrige e salva)
-- [ ] Múltiplos estados (SP, RJ, MG, CE...)
+### Fase 2 — Dados reais ✅ (parcial)
+- [x] Autenticação Supabase (Google OAuth)
+- [x] Persistência de projetos por usuário
+- [x] De-Para customizado persistente
+- [x] Tabela SINAPI no Supabase por estado e mês
+- [x] Seletor de UF e referência SINAPI na interface
+- [x] Cache e fallback inteligente para dados SINAPI
+- [ ] Import automatizado da planilha SINAPI mensal (script ETL)
+- [ ] Múltiplas UFs com dados completos populados
 
-### Fase 3 — IA
-- [ ] Sugestão de composições via embeddings (similaridade semântica)
-- [ ] Aprendizado a partir das correções manuais dos usuários
+### Fase 3 — Inteligência operacional
+- [ ] Sugestão de composições baseada em histórico de correções
+- [ ] De-Para compartilhado por equipe/empresa
 
-### Fase 4 — BIM 3D
+### Fase 4 — Planejamento avançado
+- [ ] Gantt com precedência entre tarefas
+- [ ] Múltiplas frentes de trabalho em paralelo
+- [ ] Calendário de obra configurável (feriados, turnos)
+
+### Fase 5 — BIM 5D completo
 - [ ] Upload de arquivo `.rvt` via Autodesk Platform Services
 - [ ] Visualizador 3D no browser (Forge Viewer)
 - [ ] Clique no elemento 3D → destaca linha do orçamento (BIM 5D)
+
+### Fase 6 — IA
+- [ ] Matching semântico via embeddings (pgvector + Supabase)
+- [ ] Aprendizado a partir das correções manuais dos usuários
 
 ---
 
