@@ -85,6 +85,8 @@ export default function App() {
 
     setFileName(nomeArquivo)
     setTab('orcamento')
+
+    return { tarefas, totalDias, dataFim }
   }
 
   async function tentarSalvarProjetoNovo({ nome, arquivoNome, itensProjeto, cronogramaProjeto }) {
@@ -125,16 +127,14 @@ export default function App() {
       }
 
       const mapeados = await mapearItens(revitData)
-      atualizarEstadoProjeto(file.name, mapeados)
+      const cronogramaGerado = atualizarEstadoProjeto(file.name, mapeados)
       setProjetoAtualId(null)
-
-      const { tarefas, totalDias, dataFim } = gerarCronograma(mapeados, new Date())
 
       await tentarSalvarProjetoNovo({
         nome: file.name,
         arquivoNome: file.name,
         itensProjeto: mapeados,
-        cronogramaProjeto: { tarefas, totalDias, dataFim },
+        cronogramaProjeto: cronogramaGerado,
       })
     } catch (e) {
       setErro(e.message)
@@ -197,7 +197,7 @@ export default function App() {
         item.categoria,
         item.quantidade,
         item.unidade,
-        [{ categoria: item.categoria, codigo_sinapi: codigo }],
+        [{ categoria: item.categoria, codigo_sinapi: codigo, codigo }],
       )
 
       const novoItem = {

@@ -27,6 +27,7 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
   const [editando,  setEditando]  = useState(null)
   const [codigo,    setCodigo]    = useState('')
   const [salvando,  setSalvando]  = useState(false)
+  const [erroCorrecao, setErroCorrecao] = useState('')
 
   const toggleSort = (field) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -34,7 +35,8 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
   }
 
   const itensFiltrados = itens
-    .filter(i =>
+    .map((item, indexOriginal) => ({ item, indexOriginal }))
+    .filter(({ item: i }) =>
       !filtro ||
       i.categoria?.toLowerCase().includes(filtro.toLowerCase()) ||
       i.desc?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -42,8 +44,8 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
       i.fase?.toLowerCase().includes(filtro.toLowerCase())
     )
     .sort((a, b) => {
-      const va = a[sortField] ?? ''
-      const vb = b[sortField] ?? ''
+      const va = a.item[sortField] ?? ''
+      const vb = b.item[sortField] ?? ''
       const r  = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb))
       return sortDir === 'asc' ? r : -r
     })
@@ -68,13 +70,17 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
   async function confirmarCorrecao(item, indexReal) {
     if (!onCorrigirDepara) return
     const codigoFinal = codigo.trim()
-    if (!codigoFinal) return
+    if (!codigoFinal) {
+      setErroCorrecao('Informe um código SINAPI para salvar.')
+      return
+    }
 
     setSalvando(true)
     try {
       await onCorrigirDepara(item, indexReal, codigoFinal)
       setEditando(null)
       setCodigo('')
+      setErroCorrecao('')
     } finally {
       setSalvando(false)
     }
@@ -118,8 +124,8 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
             </tr>
           </thead>
           <tbody>
-            {itensFiltrados.map((item, i) => {
-              const indexReal = itens.indexOf(item)
+            {itensFiltrados.map(({ item, indexOriginal }, i) => {
+              const indexReal = indexOriginal
               return (
                 <tr
                   key={i}
@@ -145,7 +151,10 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
                           <div className="flex items-center gap-1">
                             <input
                               value={codigo}
-                              onChange={(e) => setCodigo(e.target.value)}
+                              onChange={(e) => {
+                                setCodigo(e.target.value)
+                                setErroCorrecao('')
+                              }}
                               placeholder="Código"
                               className="w-20 px-1.5 py-1 rounded bg-white/5 border border-white/15 text-[11px] text-white/80 outline-none focus:border-brand-500/60"
                             />
@@ -158,9 +167,10 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
                             </button>
                             <button
                               onClick={() => { setEditando(null); setCodigo('') }}
+                              aria-label="Cancelar correção"
                               className="text-[11px] px-1.5 py-1 rounded glass text-white/60"
                             >
-                              X
+                              Cancelar
                             </button>
                           </div>
                         ) : (
@@ -168,6 +178,7 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
                             onClick={() => {
                               setEditando(indexReal)
                               setCodigo('')
+                              setErroCorrecao('')
                             }}
                             className="text-[11px] px-1.5 py-0.5 rounded bg-yellow-900/25 border border-yellow-700/30 text-yellow-200 hover:bg-yellow-900/35"
                           >
@@ -208,6 +219,10 @@ export default function OrcamentoTable({ itens, onEditar, onCorrigirDepara }) {
 
       {itensFiltrados.length === 0 && (
         <p className="text-center text-white/30 py-8 text-sm">Nenhum item para o filtro aplicado.</p>
+      )}
+
+      {erroCorrecao && (
+        <p className="text-xs text-red-300 mt-2">{erroCorrecao}</p>
       )}
     </div>
   )
