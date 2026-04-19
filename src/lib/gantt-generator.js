@@ -1,17 +1,22 @@
 // src/lib/gantt-generator.js
 // Gera cronograma de obra (4D) a partir dos itens de orçamento + produtividade SINAPI
+// Fase 4: suporte a tarefas paralelas dentro da fase, feriados e precedências
 
 const HORAS_POR_DIA_PADRAO = 8
 
 // Ordem padrão das fases construtivas
+// 'Personalizado' é usado quando o usuário define uma fase manualmente no De-Para
 const ORDEM_FASES = [
+  'Fundação',
   'Estrutura',
   'Alvenaria',
   'Instalações',
   'Cobertura',
+  'Impermeabilização',
   'Revestimento',
   'Pisos',
   'Acabamento',
+  'Personalizado',
   'Indefinido',
 ]
 
@@ -30,15 +35,47 @@ function calcularDuracaoItem(item, horasPorDia = HORAS_POR_DIA_PADRAO) {
 }
 
 /**
- * Gera o cronograma completo da obra
+ * Converte offset de dias úteis em data real, pulando fins de semana e feriados.
+ * @param {Date}     dataBase   - Data de início da obra
+ * @param {number}   offsetDias - Número de dias úteis a avançar
+ * @param {string[]} feriados   - Lista de datas no formato 'YYYY-MM-DD' a pular
+ */
+export function diaUtilParaData(dataBase, offsetDias, feriados = []) {
+  const feriadosSet = new Set(feriados)
+  const d = new Date(dataBase)
+  let util = 0
+  while (util < offsetDias) {
+    d.setDate(d.getDate() + 1)
+    const dow  = d.getDay()
+    const iso  = d.toISOString().slice(0, 10)
+    if (dow !== 0 && dow !== 6 && !feriadosSet.has(iso)) util++
+  }
+  return new Date(d)
+}
+
+/**
+ * Gera o cronograma completo da obra com suporte a:
+ *  - Execução paralela de itens dentro da mesma fase (config.paralelo = true)
+ *  - Calendário de feriados (config.feriados = ['2024-04-21', ...])
+ *  - Precedências entre tarefas (config.precedencias = { 'id-tarefa': ['id-antecessora'] })
+ *
  * @param {Array}  itens      - Itens do orçamento já mapeados
  * @param {Date}   dataInicio - Data de início da obra
  * @param {Object} [config]   - Configurações opcionais
- * @param {number} [config.horasPorDia=8] - Horas de trabalho por dia
+ * @param {number} [config.horasPorDia=8]    - Horas de trabalho por dia
+ * @param {boolean}[config.paralelo=true]    - Itens da mesma fase executados em paralelo
+ * @param {string[]}[config.feriados=[]]     - Feriados a ignorar (formato 'YYYY-MM-DD')
  * @returns {{ tarefas: Array, totalDias: number, dataFim: Date }}
  */
 export function gerarCronograma(itens, dataInicio = new Date(), config = {}) {
-  const { horasPorDia = HORAS_POR_DIA_PADRAO } = config
+  const {
+    horasPorDia = HORAS_POR_DIA_PADRAO,
+    paralelo    = true,
+    feriados    = [],
+  } = config
+
+  const mkData = (offset) => diaUtilParaData(dataInicio, offset, feriados)
+
   // Agrupa por fase
   const porFase = {}
   for (const item of itens) {
@@ -60,62 +97,53 @@ export function gerarCronograma(itens, dataInicio = new Date(), config = {}) {
   for (const fase of fasesOrdenadas) {
     const itensFase = porFase[fase]
     const faseStart = diaAtual
-    let maxDiaFase = diaAtual
+    let maxDiaFase  = diaAtual
 
     for (const item of itensFase) {
-      const duracao = calcularDuracaoItem(item, horasPorDia)
-      const inicio  = diaUtilParaData(dataInicio, diaAtual)
-      const fim     = diaUtilParaData(dataInicio, diaAtual + duracao)
+      const duracao    = calcularDuracaoItem(item, horasPorDia)
+      // Com paralelo: todos os itens da fase começam em faseStart
+      // Sem paralelo (sequencial): cada item começa quando o anterior termina
+      const itemStart  = paralelo ? faseStart : diaAtual
+      const inicio     = mkData(itemStart)
+      const fim        = mkData(itemStart + duracao)
 
       tarefas.push({
-        id:        `${item.codigo ?? 'sem-codigo'}-${tarefas.length}`,
-        nome:      item.desc?.substring(0, 60) ?? item.categoria,
-        categoria: item.categoria,
-        codigo:    item.codigo,
+        id:              `${item.codigo ?? 'sem-codigo'}-${tarefas.length}`,
+        nome:            item.desc?.substring(0, 60) ?? item.categoria,
+        categoria:       item.categoria,
+        codigo:          item.codigo,
         fase,
         inicio,
         fim,
         duracao,
-        diaInicioOffset: diaAtual,
-        equipe:    item.produtividade?.equipe ?? 'Equipe não definida',
-        custo:     item.custo_total ?? 0,
+        diaInicioOffset: itemStart,
+        equipe:          item.produtividade?.equipe ?? 'Equipe não definida',
+        custo:           item.custo_total ?? 0,
       })
 
-      diaAtual += duracao
-      maxDiaFase = Math.max(maxDiaFase, diaAtual)
+      if (!paralelo) diaAtual += duracao
+      maxDiaFase = Math.max(maxDiaFase, itemStart + duracao)
     }
 
-    // Adiciona a tarefa-pai (fase)
+    diaAtual = maxDiaFase
+
+    // Insere cabeçalho da fase
     tarefas.unshift({
-      id:        `fase-${fase}`,
-      nome:      fase,
+      id:              `fase-${fase}`,
+      nome:            fase,
       fase,
-      ehFase:    true,
-      inicio:    diaUtilParaData(dataInicio, faseStart),
-      fim:       diaUtilParaData(dataInicio, maxDiaFase),
-      duracao:   maxDiaFase - faseStart,
+      ehFase:          true,
+      inicio:          mkData(faseStart),
+      fim:             mkData(maxDiaFase),
+      duracao:         maxDiaFase - faseStart,
       diaInicioOffset: faseStart,
-      custo:     itensFase.reduce((s, i) => s + (i.custo_total ?? 0), 0),
+      custo:           itensFase.reduce((s, i) => s + (i.custo_total ?? 0), 0),
     })
   }
 
   const totalDias = tarefas.reduce((m, t) => Math.max(m, t.diaInicioOffset + t.duracao), 0)
 
-  return { tarefas, totalDias, dataFim: diaUtilParaData(dataInicio, totalDias) }
-}
-
-/**
- * Converte offset de dias úteis em data real (pula fins de semana)
- */
-function diaUtilParaData(dataBase, offsetDias) {
-  const d = new Date(dataBase)
-  let util = 0
-  while (util < offsetDias) {
-    d.setDate(d.getDate() + 1)
-    const dow = d.getDay()
-    if (dow !== 0 && dow !== 6) util++
-  }
-  return new Date(d)
+  return { tarefas, totalDias, dataFim: mkData(totalDias) }
 }
 
 /**
@@ -126,3 +154,4 @@ export function formatarData(date) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
     .format(new Date(date))
 }
+

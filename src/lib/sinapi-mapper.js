@@ -38,9 +38,15 @@ const DE_PARA = [
     codigos: ['94966', '92793'],
     fase: 'Estrutura',
   },
-  // Cobertura
+  // Cobertura / Telhado
   {
-    keywords: ['roof', 'ceiling', 'cobertura', 'teto', 'forro'],
+    keywords: ['roof', 'telhado', 'cobertura', 'telha'],
+    codigos: ['87551'],
+    fase: 'Cobertura',
+  },
+  // Forro / Teto
+  {
+    keywords: ['ceiling', 'teto', 'forro'],
     codigos: ['74209'],
     fase: 'Acabamento',
   },
@@ -54,6 +60,42 @@ const DE_PARA = [
   {
     keywords: ['paint', 'pintura', 'tinta'],
     codigos: ['87296'],
+    fase: 'Acabamento',
+  },
+  // Fundação
+  {
+    keywords: ['foundation', 'fundação', 'fundacao', 'sapata', 'baldrame', 'radier'],
+    codigos: ['72137', '72136'],
+    fase: 'Fundação',
+  },
+  // Instalações hidráulicas
+  {
+    keywords: ['plumbing', 'hidráulica', 'hidraulica', 'pipe', 'tubo', 'esgoto', 'água', 'agua'],
+    codigos: ['88271', '88267'],
+    fase: 'Instalações',
+  },
+  // Instalações elétricas
+  {
+    keywords: ['electrical', 'elétrica', 'eletrica', 'conduit', 'eletroduto', 'tomada', 'fiação', 'fiacao'],
+    codigos: ['93358', '93359'],
+    fase: 'Instalações',
+  },
+  // Impermeabilização
+  {
+    keywords: ['waterproof', 'impermeabilização', 'impermeabilizacao', 'manta', 'membrana'],
+    codigos: ['74252'],
+    fase: 'Estrutura',
+  },
+  // Portas
+  {
+    keywords: ['door', 'porta', 'portão', 'portao'],
+    codigos: ['74128'],
+    fase: 'Acabamento',
+  },
+  // Janelas
+  {
+    keywords: ['window', 'janela', 'esquadria', 'vidro'],
+    codigos: ['74130'],
     fase: 'Acabamento',
   },
 ]

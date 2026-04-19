@@ -5,28 +5,30 @@
 ![MIT License](https://img.shields.io/badge/license-MIT-blue)
 ![Vite](https://img.shields.io/badge/vite-5.x-purple)
 ![React](https://img.shields.io/badge/react-18-blue)
-![Vitest](https://img.shields.io/badge/tests-68_passing-green)
+![Vitest](https://img.shields.io/badge/tests-74_passing-green)
 
 ---
 
 ## O que é isso?
 
-Uma aplicação web que transforma o Schedule exportado pelo Revit (CSV ou Excel) em um **orçamento completo** com:
+Uma aplicação web que transforma o Schedule exportado pelo Revit (CSV, Excel ou `.rvt`) em um **orçamento completo** com:
 
 - ✅ Mapeamento automático de categorias Revit → composições SINAPI
 - ✅ Custo total, mão de obra e material por item
-- ✅ Cronograma 4D (Gráfico de Gantt) calculado pela produtividade SINAPI
+- ✅ Cronograma 4D com execução paralela, feriados e data configurável
 - ✅ Distribuição de custos por fase da obra
 - ✅ Exportação Excel (.xlsx) com 3 abas: Orçamento, Resumo por Fase e De-Para
 - ✅ Exportação CSV
 - ✅ Autenticação com Google via Supabase
 - ✅ Persistência de projetos por usuário no Supabase
-- ✅ De-Para customizado (usuário corrige e salva no Supabase)
-- ✅ Seletor de UF e mês de referência SINAPI (base Supabase ou fallback local)
-- ✅ Configuração de data de início do cronograma
+- ✅ De-Para customizado pessoal e por equipe (compartilhamento entre usuários)
+- ✅ Seletor de UF e mês de referência SINAPI (8 UFs na biblioteca local)
+- ✅ **Biblioteca SINAPI local** (`public/biblioteca/sinapi/`) — 20 composições × 8 estados
+- ✅ **Scripts de atualização SINAPI** — download, conversão e importação automáticos
+- ✅ **Equipes** — De-Para compartilhado entre membros do mesmo escritório/empresa
+- ✅ **Calendário de obra** — horas/dia, paralelo vs sequencial, feriados nacionais
+- ✅ **Upload .rvt** — extrai quantitativos direto do arquivo Revit via APS com revisão do usuário
 - ✅ Plano Free (3 projetos) e Pro (ilimitado)
-- 🔜 Visualizador BIM 3D (Autodesk Platform Services / Forge)
-- 🔜 IA para sugestão de composições via embeddings
 
 ---
 
@@ -38,9 +40,77 @@ Uma aplicação web que transforma o Schedule exportado pelo Revit (CSV ou Excel
 | Estilo | Tailwind CSS 3 |
 | Parser CSV | PapaParse (auto-detect delimitador) |
 | Parser Excel | SheetJS (xlsx) |
-| Backend / Auth | Supabase (Auth, projetos, de-para custom, SINAPI por estado) |
+| Backend / Auth | Supabase (Auth, projetos, de-para, SINAPI, equipes) |
+| Edge Functions | Supabase Edge Functions (Deno) — APS proxy |
+| BIM processing | Autodesk Platform Services (APS) Model Derivative API |
 | Testes | Vitest 2 + jsdom |
 | Deploy | GitHub Pages (Actions) |
+
+---
+
+## Biblioteca SINAPI
+
+A pasta `public/biblioteca/sinapi/` contém composições SINAPI em formato JSON para uso offline e como fallback quando o Supabase não tem dados para o estado/referência selecionado.
+
+**Estados disponíveis:** CE, SP, RJ, MG, RS, BA, PE, DF (referência: 2024-03)
+
+**Como atualizar:** veja [`biblioteca/README.md`](biblioteca/README.md) e os scripts em `scripts/`.
+
+```bash
+# Baixar tabela SINAPI de SP, junho/2024
+node scripts/sinapi-download.mjs --estado SP --referencia 2024-06 --saida /tmp
+
+# Converter Excel para JSON da biblioteca
+node scripts/sinapi-to-json.mjs \
+  --arquivo /tmp/SINAPI_SP_2024-06.xlsx \
+  --estado SP --referencia 2024-06
+
+# Importar para o Supabase
+node scripts/sinapi-to-supabase.mjs \
+  --arquivo public/biblioteca/sinapi/SP_2024-06.json
+```
+
+**Prioridade de dados:** Supabase → biblioteca local → dados estáticos (CE 2024-03)
+
+---
+
+## Upload de arquivo .rvt
+
+A aba **"Arquivo .rvt (BIM 5D)"** na tela inicial permite enviar o arquivo `.rvt` diretamente do Revit, sem precisar exportar o Schedule manualmente.
+
+**Fluxo:**
+1. Usuário seleciona/arrasta o `.rvt`
+2. Arquivo é enviado para o APS (Autodesk Platform Services) via Edge Function
+3. APS faz a tradução SVF2 e extrai propriedades dos elementos
+4. Usuário vê tabela de revisão com os quantitativos extraídos
+5. Usuário pode editar quantidades, marcar/desmarcar linhas e corrigir o código SINAPI
+6. Ao confirmar, o orçamento é gerado normalmente
+
+**Configuração:**
+```
+Supabase → Settings → Secrets
+  APS_CLIENT_ID     = <seu Client ID do app APS>
+  APS_CLIENT_SECRET = <seu Client Secret do app APS>
+```
+
+Deploy das Edge Functions:
+```bash
+supabase functions deploy aps-upload
+supabase functions deploy aps-extract
+```
+
+---
+
+## Equipes (De-Para compartilhado)
+
+Usuários podem criar ou entrar em uma equipe para compartilhar mapeamentos De-Para:
+
+1. Na sidebar (usuário autenticado), clique em **+ Criar** equipe ou **Entrar** com um código
+2. O código da equipe pode ser compartilhado com colegas
+3. De-Para pessoal tem prioridade sobre o De-Para da equipe
+4. Membros que entram automaticamente herdam o De-Para salvo pela equipe
+
+**Migration:** `supabase/migrations/004_equipes.sql`
 
 ---
 

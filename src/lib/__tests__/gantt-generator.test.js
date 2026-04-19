@@ -113,6 +113,85 @@ describe('gerarCronograma', () => {
   })
 })
 
+// ─── paralelo option ─────────────────────────────────────────────────────────
+
+describe('gerarCronograma (config.paralelo)', () => {
+  it('paralelo=true: items in same phase run concurrently (total = max duration)', () => {
+    const itens = [
+      makeItem('Alvenaria', 16), // 1 day
+      makeItem('Alvenaria', 40), // 3 days
+    ]
+    const result = gerarCronograma(itens, new Date('2024-01-02'), { paralelo: true })
+    // Both start at day 0; max duration = 3 → totalDias = 3
+    expect(result.totalDias).toBe(3)
+  })
+
+  it('paralelo=false: items in same phase run sequentially', () => {
+    const itens = [
+      makeItem('Alvenaria', 16), // 1 day
+      makeItem('Alvenaria', 40), // 3 days
+    ]
+    const result = gerarCronograma(itens, new Date('2024-01-02'), { paralelo: false })
+    // Sequential: 1 + 3 = 4 days total
+    expect(result.totalDias).toBe(4)
+  })
+
+  it('paralelo=true still sequences phases in order', () => {
+    const itens = [
+      makeItem('Estrutura', 16),  // 1 day
+      makeItem('Alvenaria', 16),  // 1 day
+    ]
+    const result = gerarCronograma(itens, new Date('2024-01-02'), { paralelo: true })
+    const nonFase = result.tarefas.filter(t => !t.ehFase)
+    const estrutura = nonFase.find(t => t.fase === 'Estrutura')
+    const alvenaria = nonFase.find(t => t.fase === 'Alvenaria')
+    // Estrutura must finish before Alvenaria starts
+    expect(new Date(alvenaria.inicio).getTime()).toBeGreaterThanOrEqual(new Date(estrutura.fim).getTime())
+  })
+})
+
+// ─── feriados ─────────────────────────────────────────────────────────────────
+
+describe('gerarCronograma (config.feriados)', () => {
+  it('skips a holiday: 1-day task starting on holiday eve adds 1 extra day', () => {
+    // Start Thursday 2024-01-04; task = 1 day
+    // Without holiday: ends Friday 2024-01-05
+    // With 2024-01-05 as holiday: should end Monday 2024-01-08
+    const itens = [makeItem('Alvenaria', 16)] // 1 working day
+    const noHoliday = gerarCronograma(itens, new Date('2024-01-04T12:00:00Z'))
+    const withHoliday = gerarCronograma(itens, new Date('2024-01-04T12:00:00Z'), {
+      feriados: ['2024-01-05'],
+    })
+    expect(new Date(withHoliday.dataFim).getTime()).toBeGreaterThan(
+      new Date(noHoliday.dataFim).getTime(),
+    )
+  })
+
+  it('diaUtilParaData skips the provided holiday date', async () => {
+    const { diaUtilParaData } = await import('../gantt-generator.js')
+    // base = Thursday 2024-01-04, offset=1, holiday=Friday 2024-01-05
+    // Expected: skip Fri (holiday) and Sat/Sun → Monday 2024-01-08
+    const result = diaUtilParaData(new Date('2024-01-04T12:00:00Z'), 1, ['2024-01-05'])
+    expect(result.getUTCDay()).toBe(1) // Monday
+  })
+})
+
+// ─── Fundação fase ────────────────────────────────────────────────────────────
+
+describe('gerarCronograma (Fundação before Estrutura)', () => {
+  it('Fundação appears before Estrutura in task order', () => {
+    const itens = [
+      makeItem('Estrutura', 10),
+      makeItem('Fundação', 10),
+    ]
+    const result = gerarCronograma(itens, new Date('2024-01-02'))
+    const nonFase = result.tarefas.filter(t => !t.ehFase)
+    const fundIdx  = nonFase.findIndex(t => t.fase === 'Fundação')
+    const estIdx   = nonFase.findIndex(t => t.fase === 'Estrutura')
+    expect(fundIdx).toBeLessThan(estIdx)
+  })
+})
+
 // ─── formatarData ─────────────────────────────────────────────────────────────
 
 describe('formatarData', () => {
