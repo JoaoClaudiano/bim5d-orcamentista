@@ -163,6 +163,26 @@ const DE_PARA = [
   },
 ]
 
+function construirItem({ categoria, quantidade, unidade, codigo, fase, confianca }) {
+  const sinapi = SINAPI_DB[codigo]
+  const qtdFinal = parseFloat(quantidade) || 0
+
+  return {
+    categoria,
+    codigo,
+    desc: sinapi?.desc ?? 'Composição não encontrada na base local',
+    unidade: sinapi?.unidade ?? unidade,
+    quantidade: qtdFinal,
+    custo_unitario: sinapi?.custo_total ?? 0,
+    custo_mo: sinapi?.mo ?? 0,
+    custo_material: sinapi?.material ?? 0,
+    custo_total: (sinapi?.custo_total ?? 0) * qtdFinal,
+    fase: fase ?? 'Indefinido',
+    confianca: confianca ?? 'baixa',
+    produtividade: PRODUTIVIDADE[codigo] ?? null,
+  }
+}
+
 /**
  * Mapeia uma categoria do Revit para composições SINAPI
  * @param {string} categoria - Nome da categoria do Revit
@@ -177,24 +197,16 @@ export function mapToSinapi(categoria, quantidade, unidade) {
   for (const entry of DE_PARA) {
     const match = entry.keywords.some(kw => key.includes(kw))
     if (match) {
-      return entry.codigos.map((codigo, idx) => {
-        const sinapi = SINAPI_DB[codigo]
-        const qtdFinal = parseFloat(quantidade) || 0
-        return {
+      return entry.codigos.map((codigo, idx) =>
+        construirItem({
           categoria,
+          quantidade,
+          unidade,
           codigo,
-          desc: sinapi?.desc ?? 'Composição não encontrada na base local',
-          unidade: sinapi?.unidade ?? unidade,
-          quantidade: qtdFinal,
-          custo_unitario: sinapi?.custo_total ?? 0,
-          custo_mo: sinapi?.mo ?? 0,
-          custo_material: sinapi?.material ?? 0,
-          custo_total: (sinapi?.custo_total ?? 0) * qtdFinal,
           fase: entry.fase,
           confianca: idx === 0 ? 'alta' : 'media',
-          produtividade: PRODUTIVIDADE[codigo] ?? null,
-        }
-      })
+        }),
+      )
     }
   }
 
@@ -213,6 +225,36 @@ export function mapToSinapi(categoria, quantidade, unidade) {
     confianca: 'baixa',
     produtividade: null,
   }]
+}
+
+/**
+ * Mapeia categoria usando De-Para customizado do usuário antes do dicionário padrão
+ */
+export async function mapToSinapiComCustom(categoria, quantidade, unidade, customDePara = []) {
+  const key = (categoria || '').toLowerCase().trim()
+  const entradaCustom = (customDePara || []).find(item => {
+    const categoriaCustom = (
+      item?.categoria_normalizada ||
+      item?.categoria ||
+      ''
+    ).toLowerCase().trim()
+
+    return categoriaCustom && categoriaCustom === key
+  })
+
+  if (entradaCustom?.codigo_sinapi || entradaCustom?.codigo) {
+    const codigo = String(entradaCustom.codigo_sinapi || entradaCustom.codigo).trim()
+    return [construirItem({
+      categoria,
+      quantidade,
+      unidade,
+      codigo,
+      fase: 'Personalizado',
+      confianca: 'alta',
+    })]
+  }
+
+  return mapToSinapi(categoria, quantidade, unidade)
 }
 
 /**
